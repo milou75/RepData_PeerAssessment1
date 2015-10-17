@@ -5,21 +5,171 @@ output:
     keep_md: true
 ---
 
-
 ## Loading and preprocessing the data
-
-
+```{r loading, results="hide"}
+########################################################################
+## Comment on the report contents
+########################################################################
+## Since the assignment is not totally clear about what is the "report" and what
+## is "the submission"
+## (the .md or (.md + .Rmd) ?) I have made the choice to limit the amount of code 
+## displayed in the .md file in order to keep it readable for a reader only
+## interested in key results (I guess it would be the purpose in real business).
+## 
+## I included code in .md document only for the loading and preprocessing data section
+## and for the strategy for imputing NA value.
+## The rest of the .md is only plots and text to answer questions.
+##
+## Of course, all code is provided in the .Rmd file in order to be reproduced
+## (most chuncks have echo=FALSE to be removed to get everything in the .md).
+##
+########################################################################
+##
+FIBIT_DATA<-read.csv("./activity.csv", sep=",", header= TRUE, na.strings=c("NA"),
+                     colClasses=c("numeric","character","numeric"))
+library(dplyr)
+```
 
 ## What is mean total number of steps taken per day?
+```{r step1, echo=FALSE}
+##--- Calculate total number of steps for each day (61 days)
+STEPS_PER_DAY<-summarize(group_by(FIBIT_DATA,date), sum(steps, na.rm = TRUE))
 
+##--- Prepare Histogram
+colnames(STEPS_PER_DAY) <- c("date","steps_per_day") #rename column in STEPS_PER_DAY
+hist(STEPS_PER_DAY$steps_per_day, col = "blue", breaks = 15,
+     main="-Total Steps per Day (Two Months) - mean (red) and median (green)-",
+     xlab="-Number of Steps (One Day)-")
+rug(STEPS_PER_DAY$steps_per_day)
+##--- Mean and median values added to plot
+abline(v=mean(STEPS_PER_DAY$steps_per_day), col = "red", lwd=4)
+abline(v=median(STEPS_PER_DAY$steps_per_day), col = "green", lwd=4)
 
+##--- mean and median to report
+mean_steps_day<-as.integer(mean(STEPS_PER_DAY$steps_per_day))
+median_steps_day<-as.integer(median(STEPS_PER_DAY$steps_per_day))
+```
+
+Mean number of steps per day is `r mean_steps_day`. 
+
+Median number of steps per day is `r median_steps_day`.
 
 ## What is the average daily activity pattern?
+```{r step2, echo=FALSE}
+##--- Prepare Time Series Plot
+STEPS_PER_INTERVAL<-summarize(group_by(FIBIT_DATA,interval), mean(steps, na.rm = TRUE))
+colnames(STEPS_PER_INTERVAL) <- c("interval","mean_steps_per_interval") #rename columns
+with(STEPS_PER_INTERVAL,{plot(interval, mean_steps_per_interval,
+                              type="l", col="blue", lwd=2,
+                              main="-Daily Average Steps per Interval-",
+                              xlab="-Intervals-",
+                              ylab="-Number of Steps (averaged for 2 Months)-")})
 
+##-- Identify Daily Peak Activity
+max_number_of_steps<-max(STEPS_PER_INTERVAL$mean_steps_per_interval)
+peak_activity<-filter(STEPS_PER_INTERVAL,
+                      mean_steps_per_interval == max_number_of_steps)
+##--- Report Peak Activity 
+peak_activity_hour<-substr(as.character(peak_activity$interval),1,1)
+peak_activity_minute<-substr(as.character(peak_activity$interval),2,3)
+```
 
+The daily peak activity interval starts at `r peak_activity_hour`.
+                                           `r peak_activity_minute` a.m. 
 
 ## Imputing missing values
+```{r step3, echo=FALSE}
+########################################################################
+## Imputing Missing Values
+########################################################################
+##--- Calculate total number of NA
+NA_Number<-nrow(filter(FIBIT_DATA, is.na(steps) == "TRUE"))
+```
 
+The total number of NA is : `r NA_Number`.
 
+```{r step4}
+################################################################
+## Imputing Missing Values Strategy
+################################################################
+##--- Replace NA with mean value for same time interval
+##--- new dataset FIBIT_DATA_NONA is created with "no NA" values.
+FIBIT_DATA_NONA<-FIBIT_DATA
+for (i in 1:nrow(FIBIT_DATA_NONA))
+        {if(is.na(FIBIT_DATA_NONA[i,1])=="TRUE")
+                {temp<-filter(STEPS_PER_INTERVAL,
+                             interval == FIBIT_DATA_NONA[i,3])
+                 FIBIT_DATA_NONA[i,1]<-as.integer(temp[1,2])
+                }   
+        }
+```
+
+```{r step5, echo=FALSE}
+#--- Histogram on Updated FIBIT DATA (NO NA)
+STEPS_PER_DAY_NONA<-summarize(group_by(FIBIT_DATA_NONA,date),
+                              sum(steps, na.rm = TRUE))
+colnames(STEPS_PER_DAY_NONA) <- c("date","steps_per_day") #rename columns
+hist(STEPS_PER_DAY_NONA$steps_per_day, col = "blue", breaks = 15, lwd=2,
+     main="-Total Steps per Day (Two Months) - mean (red) and median (green)-",
+     xlab="-Number of Steps (One Day)-")
+rug(STEPS_PER_DAY_NONA$steps_per_day)
+abline(v=mean(STEPS_PER_DAY_NONA$steps_per_day), col = "red", lwd=4)
+abline(v=median(STEPS_PER_DAY_NONA$steps_per_day), col = "green", lwd=4)
+mean_steps_day_nona<-as.integer(mean(STEPS_PER_DAY_NONA$steps_per_day))
+median_steps_day_nona<-as.integer(median(STEPS_PER_DAY_NONA$steps_per_day))
+```
+
+Mean number of steps per day is `r mean_steps_day_nona`. 
+
+Median number of steps per day is `r median_steps_day_nona`.
+
+Compared to the first part of the assignment the "left bar" has been reduced. Therefore, mean and median values have slightly increased and converged.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+```{r step6, echo=FALSE, fig.height=10}
+#--- Add weekdays - weekend
+FIBIT_DATA_NONA<-mutate(FIBIT_DATA_NONA, day_category = weekdays(as.POSIXct(date)))
+for (i in 1:nrow(FIBIT_DATA_NONA))
+        { if((FIBIT_DATA_NONA[i,4]=="Samedi")||(FIBIT_DATA_NONA[i,4]=="Dimanche"))
+                {FIBIT_DATA_NONA[i,4]<-"weekend"} 
+          else
+                {FIBIT_DATA_NONA[i,4]<-"weekday"}
+        }
+
+#--- Prepare Plot Layout
+par(mfrow = c(2,1))
+
+#--- Weekdays (at the top)
+STEPS_PER_INTERVAL_WD<-summarize(group_by(filter(FIBIT_DATA_NONA,
+                                                 day_category=="weekday"),
+                                          interval),
+                                 mean(steps, na.rm = TRUE)
+                                 )
+colnames(STEPS_PER_INTERVAL_WD) <- c("interval","mean_steps_per_interval")
+with(STEPS_PER_INTERVAL_WD,{plot(interval, mean_steps_per_interval,
+                                 type="l", col="blue", lwd=2,
+                                 ylim=c(0,250),
+                                 main="-Daily Average Steps per Interval (Weekdays)-",
+                                 xlab="-Intervals-",
+                                 ylab="-Steps - Weekdays- Averaged for 2 Months-")
+                           }
+     )
+
+#--- Weekends (Bottom plot)
+STEPS_PER_INTERVAL_WE<-summarize(group_by(filter(FIBIT_DATA_NONA,
+                                                 day_category=="weekend"),
+                                          interval),
+                                 mean(steps, na.rm = TRUE)
+                                 )
+colnames(STEPS_PER_INTERVAL_WE) <- c("interval","mean_steps_per_interval")
+with(STEPS_PER_INTERVAL_WE,{plot(interval, mean_steps_per_interval, 
+                                 type="l", col="green", lwd=2,
+                                 ylim=c(0,250),
+                                 main="-Daily Average Steps per Interval (Weekend)-",
+                                 xlab="-Intervals-",
+                                 ylab="-Steps - Weekends - Averaged for 2 Months-")
+                            }
+     )
+```
+
+The activity starts slightly later at WE. There is no "morning peak" but the activity level is higher (spcifically in the afternoon).
